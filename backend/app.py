@@ -37,6 +37,12 @@ def load_env_file(env_path, override=True):
 
 load_env_file(os.path.join(root_dir, ".env"), override=True)
 
+
+def normalize_database_uri(database_uri):
+    if database_uri.startswith("postgres://"):
+        return f"postgresql://{database_uri[len('postgres://'):] }"
+    return database_uri
+
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from backend.routes import register_routes
@@ -81,6 +87,8 @@ def create_app():
         default_db_path = os.path.join(root_dir, "instance", "lab_manager.db")
         os.makedirs(os.path.dirname(default_db_path), exist_ok=True)
         database_uri = f"sqlite:///{default_db_path}"
+    else:
+        database_uri = normalize_database_uri(database_uri)
 
     app = Flask(__name__, static_folder=frontend_build_dir, static_url_path="")
     app.config.from_mapping(

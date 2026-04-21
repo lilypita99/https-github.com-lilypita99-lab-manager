@@ -319,6 +319,12 @@ def register_routes(app):
             return "Google OAuth is misconfigured: GOOGLE_CLIENT_SECRET is missing or invalid.", None, None
         return None, client_id, client_secret
 
+    def _google_redirect_uri():
+        configured = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
+        if configured:
+            return configured
+        return f"{request.url_root.rstrip('/')}/api/auth/oauth/google/callback"
+
     def _oauth_finish(email, name, provider, frontend_url):
         """Find or create user from OAuth, issue token, redirect to frontend."""
         if not email:
@@ -391,10 +397,7 @@ def register_routes(app):
             return jsonify({"error": config_error}), 503
         state = _sec.token_urlsafe(16)
         _oauth_states[state] = "google"
-        redirect_uri = os.environ.get(
-            "GOOGLE_REDIRECT_URI",
-            "http://localhost:5003/api/auth/oauth/google/callback",
-        )
+        redirect_uri = _google_redirect_uri()
         params = urllib.parse.urlencode({
             "client_id": client_id,
             "redirect_uri": redirect_uri,
@@ -413,10 +416,7 @@ def register_routes(app):
         if not code or state not in _oauth_states:
             return redirect(f"{frontend_url}?oauth_error=invalid_state")
         _oauth_states.pop(state)
-        redirect_uri = os.environ.get(
-            "GOOGLE_REDIRECT_URI",
-            "http://localhost:5003/api/auth/oauth/google/callback",
-        )
+        redirect_uri = _google_redirect_uri()
         try:
             token_res = _http.post(
                 "https://oauth2.googleapis.com/token",

@@ -1,15 +1,21 @@
 services:
   - type: web
     name: labflow
-    env: docker
-    dockerfilePath: ./Dockerfile
+    env: python
+    rootDir: .
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT backend.wsgi:app
     autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
       - key: FRONTEND_URL
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
         sync: false
       - key: DATABASE_URL
         sync: false
