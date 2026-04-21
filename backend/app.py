@@ -1,5 +1,7 @@
 import os
 import sys
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 # Ensure package imports work when running app.py from the backend directory
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,9 +41,38 @@ load_env_file(os.path.join(root_dir, ".env"), override=True)
 
 
 def normalize_database_uri(database_uri):
+    if not database_uri:
+        return database_uri
+
+    database_uri = database_uri.strip().lstrip("\ufeff")
+
+    if (database_uri.startswith('"') and database_uri.endswith('"')) or (
+        database_uri.startswith("'") and database_uri.endswith("'")
+    ):
+        database_uri = database_uri[1:-1].strip()
+
     if database_uri.startswith("postgres://"):
-        return f"postgresql://{database_uri[len('postgres://'):] }"
+        return f"postgresql://{database_uri[len('postgres://'):]}"
+
     return database_uri
+
+
+def mask_database_uri(database_uri):
+    if not database_uri:
+        return "<empty>"
+
+    if "@" not in database_uri or "://" not in database_uri:
+        return database_uri
+
+    scheme, remainder = database_uri.split("://", 1)
+    credentials, host = remainder.split("@", 1)
+    if ":" in credentials:
+        username, _password = credentials.split(":", 1)
+        credentials = f"{username}:***"
+    else:
+        credentials = "***"
+
+    return f"{scheme}://{credentials}@{host}"
 
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
@@ -82,13 +113,19 @@ def initialize_database(app):
 
 def create_app():
     frontend_build_dir = os.path.join(root_dir, "frontend", "build")
-    database_uri = os.environ.get("DATABASE_URL")
+    database_uri = normalize_database_uri(os.environ.get("DATABASE_URL"))
     if not database_uri:
         default_db_path = os.path.join(root_dir, "instance", "lab_manager.db")
         os.makedirs(os.path.dirname(default_db_path), exist_ok=True)
         database_uri = f"sqlite:///{default_db_path}"
-    else:
-        database_uri = normalize_database_uri(database_uri)
+
+    try:
+        make_url(database_uri)
+    except ArgumentError as exc:
+        raise RuntimeError(
+            "DATABASE_URL is malformed. "
+            f"Received: {mask_database_uri(database_uri)}"
+        ) from exc
 
     app = Flask(__name__, static_folder=frontend_build_dir, static_url_path="")
     app.config.from_mapping(
